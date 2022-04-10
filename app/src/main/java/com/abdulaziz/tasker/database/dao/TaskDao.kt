@@ -30,7 +30,7 @@ interface TaskDao {
     fun updateTask(task: Task)
 
     @Delete
-    suspend fun deleteTask(task: Task)
+    fun deleteTask(task: Task)
 
     @Query("SELECT * FROM task_table ORDER BY taskId DESC LIMIT 1")
     suspend fun getLastTask(): Task?

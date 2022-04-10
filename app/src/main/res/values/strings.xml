@@ -11,4 +11,5 @@
     <string name="tomorrow">Tomorrow</string>
     <string name="task">Task</string>
     <string name="list">List</string>
+    <string name="delete">Delete</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.abdulaziz.tasker.adapters
 
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -10,10 +11,13 @@ import android.graphics.PorterDuffColorFilter
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.StrikethroughSpan
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MenuItem
 import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
+import android.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.abdulaziz.tasker.AlarmReceiver
@@ -30,7 +34,7 @@ class ActualTaskAdapter(
     private val isByType: Boolean
 ) : RecyclerView.Adapter<ActualTaskAdapter.ATVH>() {
 
-    private var list: ArrayList<Task>? = null
+    private var list = arrayListOf<Task>()
     private var notiAnimated = false
     private lateinit var context:Context
     private lateinit var taskDao: TaskDao
@@ -43,7 +47,8 @@ class ActualTaskAdapter(
             taskDao = AppDatabase.getDatabase(context).taskDao()
         }
 
-        fun onBind(task: Task) {
+        @SuppressLint("NotifyDataSetChanged")
+        fun onBind(task: Task, position: Int) {
 
             itemBinding.titleTv.text = task.name
             itemBinding.timeTv.text = task.time
@@ -65,21 +70,46 @@ class ActualTaskAdapter(
 
             itemBinding.checkbox.setOnCheckedChangeListener { buttonView, isChecked ->
                 if (isChecked && !task.isCompleted) {
-                    val pendingIntent = PendingIntent.getBroadcast(
-                        context,
-                        task.taskId,
-                        Intent(context, AlarmReceiver::class.java),
-                        PendingIntent.FLAG_UPDATE_CURRENT
-                    )
-                    val alarmManager =
-                        (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager?)!!
-                    alarmManager.cancel(pendingIntent)
+                    cancelAlarm(task)
                     task.isCompleted = true
                     taskDao.updateTask(task)
                     notifyDataSetChanged()
                 }
             }
             checkTask(task)
+            itemBinding.root.setOnLongClickListener {
+               PopupMenu(context, it, Gravity.TOP).apply {
+                   inflate(R.menu.task_edit_menu)
+                   setOnMenuItemClickListener { item: MenuItem? ->
+                       when (item!!.itemId) {
+                           R.id.delete -> {
+                               cancelAlarm(task)
+                               list.remove(task)
+                               notifyItemRemoved(position)
+                               notifyItemRangeChanged(position, list.size - 1)
+                               taskDao.deleteTask(task)
+                           }
+                       }
+                       true
+                   }
+                   show()
+               }
+
+                true
+            }
+        }
+
+        @SuppressLint("UnspecifiedImmutableFlag")
+        private fun cancelAlarm(task: Task) {
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                task.taskId,
+                Intent(context, AlarmReceiver::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val alarmManager =
+                (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager?)!!
+            alarmManager.cancel(pendingIntent)
         }
 
         private fun checkTask(task: Task) {
@@ -154,7 +184,7 @@ class ActualTaskAdapter(
 
     private fun checkDate(date: String): String {
 
-        var checkedDate = ""
+        val checkedDate:String
         val todayCalendar = Calendar.getInstance()
         val calendar = Calendar.getInstance()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
@@ -181,9 +211,10 @@ class ActualTaskAdapter(
     }
 
     override fun onBindViewHolder(holder: ATVH, position: Int) {
-        holder.onBind(list!![position])
+        holder.onBind(list[position], position)
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     fun setTasks(list: List<Task>) {
         this.list = list as ArrayList<Task>
         notifyDataSetChanged()
@@ -193,6 +224,6 @@ class ActualTaskAdapter(
         notiAnimated = b
     }
 
-    override fun getItemCount(): Int = list?.size ?: 0
+    override fun getItemCount(): Int = list.size
 
 }

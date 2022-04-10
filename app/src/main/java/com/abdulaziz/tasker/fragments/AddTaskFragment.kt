@@ -37,6 +37,8 @@ import com.abdulaziz.tasker.utils.Types
 import com.applandeo.materialcalendarview.EventDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -73,9 +75,9 @@ class AddTaskFragment : Fragment() {
             alertID = if (database.taskDao().getLastTask() != null)
                 (database.taskDao().getLastTask()!!.taskId) + 1
             else 0
-            database.taskDao().getTasks().collect {
+            database.taskDao().getTasks().onEach {
                 setEvents(it)
-            }
+            }.launchIn(this)
         }
     }
 
@@ -98,7 +100,7 @@ class AddTaskFragment : Fragment() {
 
     @SuppressLint("UnspecifiedImmutableFlag")
     private fun scheduleNotification(notification: Notification) {
-        val notificationIntent = Intent(requireContext(), AlarmReceiver::class.java)
+        val notificationIntent = Intent(binding.root.context, AlarmReceiver::class.java)
         val intent = Intent(context, MainActivity::class.java)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         intent.putExtra("noti", binding.timeTv.text.toString())
@@ -131,7 +133,7 @@ class AddTaskFragment : Fragment() {
 
     private fun getNotification(content: String): Notification {
         val builder: NotificationCompat.Builder =
-            NotificationCompat.Builder(requireContext(), default_notification_channel_id)
+            NotificationCompat.Builder(binding.root.context, default_notification_channel_id)
         builder.setContentTitle(binding.taskTitleEt.text.toString())
         builder.setContentText(content)
         builder.setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -158,7 +160,6 @@ class AddTaskFragment : Fragment() {
                         scheduleNotification(getNotification(taskType!!.type_name))
                     }
                     insertTask(task)
-                    // viewModel.insert(task)
                     (activity as MainActivity).onBackPressed()
                 } else {
                     binding.taskTitleEt.error = "Write down what you want to do!"
@@ -207,7 +208,7 @@ class AddTaskFragment : Fragment() {
         val minute = if (p2.toString().length < 2) "0$p2" else p2
         time = "${hour}:${minute}"
         binding.timeTv.text = time
-        val drawable = ContextCompat.getDrawable(requireContext(), R.drawable.ic_alarm_for_textview)
+        val drawable = ContextCompat.getDrawable(binding.root.context, R.drawable.ic_alarm_for_textview)
         drawable!!.setTint(Color.parseColor("#80000000"))
         binding.timeTv.setCompoundDrawablesWithIntrinsicBounds(
             drawable,
@@ -303,7 +304,7 @@ class AddTaskFragment : Fragment() {
 
     private fun setUpTypeRV() {
         typeAdapter = TaskTypeAdapter(
-            TaskTypes.getTypes(requireContext()),
+            TaskTypes.getTypes(binding.root.context),
             object : TaskTypeAdapter.OnTypeClickListener {
                 override fun onTypeClicked(type: Types) {
                     binding.taskTypeRb.text = type.type_name
@@ -315,11 +316,10 @@ class AddTaskFragment : Fragment() {
             }, true
         )
         binding.tasksTypeRv.adapter = typeAdapter
-        lifecycleScope.launch(Dispatchers.Main) {
-            database.taskDao().getTasks().collect {
-                typeAdapter.setTasks(it)
-            }
-        }
+        database.taskDao().getTasks().onEach {
+            typeAdapter.setTasks(it)
+        }.launchIn(lifecycleScope)
+
     }
 
 
@@ -332,30 +332,14 @@ class AddTaskFragment : Fragment() {
                         tasksTypeRv.visibility = View.GONE
                         calendarView.visibility = View.VISIBLE
                         timePickerLayout.visibility = View.GONE
-                        if (binding.dateTv.text.isEmpty()) {
-                            binding.dateTv.text = "Today"
-                            val drawable = ContextCompat.getDrawable(
-                                requireContext(),
-                                R.drawable.ic_calendar_for_textview
-                            )
-                            drawable!!.setTint(Color.parseColor("#80000000"))
-                            binding.dateTv.setCompoundDrawablesWithIntrinsicBounds(
-                                drawable,
-                                null,
-                                null,
-                                null
-                            )
-                            date = SimpleDateFormat(
-                                "yyyy-MM-dd",
-                                Locale.ENGLISH
-                            ).format(binding.calendarView.selectedDates[0].time)
-                        }
+                        initDefaultDate()
                     }
                     R.id.time_rb -> {
                         tasksTypeRv.visibility = View.GONE
                         calendarView.visibility = View.GONE
                         timePickerLayout.visibility = View.VISIBLE
                         setTime(binding.timePicker.hour, binding.timePicker.minute)
+                        initDefaultDate()
                     }
                     R.id.task_type_rb -> {
                         tasksTypeRv.visibility = View.VISIBLE
@@ -365,6 +349,28 @@ class AddTaskFragment : Fragment() {
                 }
                 hideKeyboard()
             }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun initDefaultDate() {
+        if (binding.dateTv.text.isEmpty()) {
+            binding.dateTv.text = "Today"
+            val drawable = ContextCompat.getDrawable(
+                binding.root.context,
+                R.drawable.ic_calendar_for_textview
+            )
+            drawable!!.setTint(Color.parseColor("#80000000"))
+            binding.dateTv.setCompoundDrawablesWithIntrinsicBounds(
+                drawable,
+                null,
+                null,
+                null
+            )
+            date = SimpleDateFormat(
+                "yyyy-MM-dd",
+                Locale.ENGLISH
+            ).format(binding.calendarView.selectedDates[0].time)
         }
     }
 
